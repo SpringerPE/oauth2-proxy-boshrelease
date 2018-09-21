@@ -133,7 +133,6 @@ releases:
   version: $version
   sha1: $sha1
 EOF
-)
 # Create a new tag and update the changes
 echo "* Commiting git changes ..."
 git add .final_builds releases/$RELEASE/index.yml "releases/$RELEASE/$RELEASE-$version.yml" config/blobs.yml manifest/vars-release-version.yml
