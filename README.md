@@ -1,4 +1,4 @@
-# Oauth2-proxy Bosh release
+# Oauth2-proxy Bosh Release
 
 This is a release based in https://github.com/bitly/oauth2_proxy
 offering a reverse proxy that provides SSO authentication layer with Google,
