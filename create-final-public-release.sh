@@ -124,15 +124,22 @@ else
     $BOSH_CLI create-release --force --final --tarball="/tmp/$RELEASE-$$.tgz" --name "$RELEASE" --version "$version"
 fi
 
+# Create a release in Github
+sha1=$($SHA1 "/tmp/$RELEASE-$$.tgz" | cut -d' ' -f1)
+release_data=$(cat <<EOF
+releases:
+- name: $RELEASE
+  url: https://github.com/${GITHUB_REPO}/releases/download/v${version}/${RELEASE}-${version}.tgz
+  version: $version
+  sha1: $sha1
+EOF
+)
 # Create a new tag and update the changes
 echo "* Commiting git changes ..."
-git add .final_builds releases/$RELEASE/index.yml "releases/$RELEASE/$RELEASE-$version.yml"
+git add .final_builds releases/$RELEASE/index.yml "releases/$RELEASE/$RELEASE-$version.yml" manifest/vars-release-version.yml
 git commit -m "$RELEASE v$version Boshrelease"
 git push --tags
 
-# Create a release in Github
-echo "* Creating a new release in Github ... "
-sha1=$($SHA1 "/tmp/$RELEASE-$$.tgz" | cut -d' ' -f1)
 description=$(cat <<EOF
 # $RELEASE version $version
 
@@ -151,6 +158,7 @@ $git_changes
       sha1: $sha1
 EOF
 )
+echo "* Creating a new release in Github ... "
 printf -v DATA '{"tag_name": "v%s","target_commitish": "master","name": "v%s","body": %s,"draft": false, "prerelease": false}' "$version" "$version" "$(echo "$description" | $JQ -R -s '@text')"
 releaseid=$($CURL -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -XPOST --data "$DATA" "https://api.github.com/repos/$GITHUB_REPO/releases" | $JQ '.id')
 

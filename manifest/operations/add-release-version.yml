@@ -1,6 +1,6 @@
 ---
 - type: replace
-  path: /releases/name=oauth2-proxy?
+  path: /releases?
   value:
-    ((release))
+    ((releases))
 
