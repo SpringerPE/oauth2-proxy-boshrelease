@@ -137,6 +137,7 @@ EOF
 echo "* Commiting git changes ..."
 git add .final_builds releases/$RELEASE/index.yml "releases/$RELEASE/$RELEASE-$version.yml" config/blobs.yml manifest/vars-release-version.yml
 git commit -m "$RELEASE v$version Boshrelease"
+git push
 git push --tags
 
 description=$(cat <<EOF
