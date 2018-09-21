@@ -126,7 +126,7 @@ fi
 
 # Create a release in Github
 sha1=$($SHA1 "/tmp/$RELEASE-$$.tgz" | cut -d' ' -f1)
-release_data=$(cat <<EOF
+cat <<EOF > manifest/vars-release-version.yml
 releases:
 - name: $RELEASE
   url: https://github.com/${GITHUB_REPO}/releases/download/v${version}/${RELEASE}-${version}.tgz
