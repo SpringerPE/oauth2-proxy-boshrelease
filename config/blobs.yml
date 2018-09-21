@@ -1,1 +1,24 @@
-{}
+lua/LuaJIT-2.0.5.tar.gz:
+  size: 849845
+  sha: 10427215da7d424fd9e48adbea087966053cdb6f
+nginx-lua/headers-more-nginx-module-0.33.tar.gz:
+  size: 28130
+  sha: 7d6af910dae98f0dbc67bf77e82eab8b7da5d0b1
+nginx-lua/lua-nginx-module-0.10.13.tar.gz:
+  size: 624102
+  sha: 88f16ee8f1d168d1f6c1f2a1b48d31a5f4429114
+nginx-lua/nginx-1.14.0.tar.gz:
+  size: 1016272
+  sha: 016ab1a12c9a0c9444f9073e4300223ffd6fadbe
+nginx-lua/ngx_devel_kit-0.3.0.tar.gz:
+  size: 66455
+  sha: b556d068db23037be30436af559795f45dd93c67
+nginx-lua/pcre-8.42.tar.gz:
+  size: 2081413
+  sha: ee505270446f4c4bf52ac1a371335fdbb14465cb
+nginx-lua/zlib-1.2.11.tar.gz:
+  size: 607698
+  sha: e6d119755acdf9104d7ba236b1242696940ed6dd
+oauth2_proxy/oauth2_proxy-2.2.0.tar.gz:
+  size: 3339647
+  sha: 1c73bc38141e079441875e5ea5e1a1d6054b4f3b

@@ -5,7 +5,7 @@ set -e
 
 ##
 
-RELEASE="cf-logging"
+RELEASE="oauth2-proxy"
 DESCRIPTION="Oauth2-proxy Bosh Release"
 GITHUB_REPO="SpringerPE/oauth2-proxy-boshrelease"
 # Do not define this variable if the repo uses git lfs
