@@ -28,4 +28,5 @@ nginx-lua/zlib-1.2.11.tar.gz:
   sha: e6d119755acdf9104d7ba236b1242696940ed6dd
 oauth2_proxy/oauth2_proxy-2.2.0.tar.gz:
   size: 3339647
+  object_id: 2385a306-03bf-4a49-450f-a88f832cbbdb
   sha: 1c73bc38141e079441875e5ea5e1a1d6054b4f3b

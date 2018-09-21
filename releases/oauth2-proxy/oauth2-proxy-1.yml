@@ -1,0 +1,35 @@
+name: oauth2-proxy
+version: "1"
+commit_hash: d52df04
+uncommitted_changes: true
+jobs:
+- name: nginx-lua
+  version: a67c91970f7c23276b76a4930806b32c6c3068a4
+  fingerprint: a67c91970f7c23276b76a4930806b32c6c3068a4
+  sha1: 1aa1f80d43b09fad6e360d1b2e768cc0528cabbb
+- name: oauth2_proxy
+  version: 8fb62c72c496c29ec2bf4450ed689bcda03c1795
+  fingerprint: 8fb62c72c496c29ec2bf4450ed689bcda03c1795
+  sha1: a2b52ff8ce614a6a6965d33127a753aeb42416df
+packages:
+- name: bosh-helpers
+  version: cab3f7d1012fb8d71910fd9b84be7a222ae4bbc3
+  fingerprint: cab3f7d1012fb8d71910fd9b84be7a222ae4bbc3
+  sha1: 9ac32af19550a93376c8f8d7d27a6675c6c6ac1d
+  dependencies: []
+- name: luajit
+  version: 29f6e0bdf8bad0ee1982e04bf803087b51641523
+  fingerprint: 29f6e0bdf8bad0ee1982e04bf803087b51641523
+  sha1: 286e95c280aedddf777950f830d22f893088a7db
+  dependencies: []
+- name: nginx-lua
+  version: 26593bb26c9a708cfb1d1f794e7ade972adf2a53
+  fingerprint: 26593bb26c9a708cfb1d1f794e7ade972adf2a53
+  sha1: 3e7afab260a605eedfe62122ec7bcd337b5bcaf6
+  dependencies:
+  - luajit
+- name: oauth2_proxy
+  version: c01ac4256539e9008dd61340af711f66efd7f449
+  fingerprint: c01ac4256539e9008dd61340af711f66efd7f449
+  sha1: 21ce66f86469bc9f97f2fe83fb75a54187de5f22
+  dependencies: []
