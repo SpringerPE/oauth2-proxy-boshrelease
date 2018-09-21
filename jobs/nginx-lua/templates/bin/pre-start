@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -e # exit immediately if a simple command exits with a non-zero status
+
+# Load job properties
+source /var/vcap/jobs/nginx-lua/data/properties.sh
+
+# Setup env vars and folders for the ctl script
+source /var/vcap/jobs/nginx-lua/packages/bosh-helpers/setup.sh "nginx-lua"
+
+# Env variables
+source /var/vcap/jobs/nginx-lua/data/env.sh
+
+# Load function lib (alway before setup, there are some global variables needed)
+source /var/vcap/jobs/nginx-lua/packages/bosh-helpers/lib.sh
+
+# setup sites folder
+export CONFD_DIR="${JOB_DIR}/config/sites"
+rm -rf "${CONFD_DIR}"
+mkdir -p "${CONFD_DIR}" && chmod 775 "${CONFD_DIR}" && chown vcap.vcap "${CONFD_DIR}"
+bash /var/vcap/jobs/nginx-lua/config/confd.sh "${CONFD_DIR}"
+
+# setup lua folder
+export LUA_DIR="${JOB_DIR}/config/lua"
+rm -rf "${LUA_DIR}"
+mkdir -p "${LUA_DIR}" && chmod 775 "${LUA_DIR}" && chown vcap.vcap "${LUA_DIR}"
+bash /var/vcap/jobs/nginx-lua/config/luad.sh "${LUA_DIR}"
+

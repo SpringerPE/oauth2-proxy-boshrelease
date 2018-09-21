@@ -1,0 +1,13 @@
+---
+name: nginx-lua
+
+dependencies:
+- luajit
+
+files:
+- nginx-lua/nginx-1.14.0.tar.gz                     # http://nginx.org/download/nginx-1.14.0.tar.gz
+- nginx-lua/headers-more-nginx-module-0.33.tar.gz   # https://github.com/openresty/headers-more-nginx-module/archive/v0.33.tar.gz 
+- nginx-lua/pcre-8.42.tar.gz                        # ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.42.tar.gz
+- nginx-lua/lua-nginx-module-0.10.13.tar.gz         # https://github.com/openresty/lua-nginx-module/archive/v0.10.13.tar.gz
+- nginx-lua/ngx_devel_kit-0.3.0.tar.gz              # https://github.com/simpl/ngx_devel_kit/archive/v0.3.0.tar.gz
+- nginx-lua/zlib-1.2.11.tar.gz                      # http://zlib.net/zlib-1.2.11.tar.gz

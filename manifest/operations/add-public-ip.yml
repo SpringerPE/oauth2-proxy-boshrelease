@@ -1,0 +1,13 @@
+---
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/networks/name=default/default?
+  value:
+  - dns
+  - gateway
+
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/networks/-
+  value: 
+    name: public
+    static_ips:
+    - ((oauth2_proxy-external_ip))

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e -x
+
+
+BOSH_PACKAGES_DIR=${BOSH_PACKAGES_DIR:-/var/vcap/packages}
+
+mkdir -p ${BOSH_INSTALL_TARGET}/bin/
+
+tar -xvf oauth2_proxy/oauth2_proxy-2.2.0.tar.gz --strip-components=1 -C ${BOSH_INSTALL_TARGET}/bin/
+
+chmod a+x ${BOSH_INSTALL_TARGET}/bin/*

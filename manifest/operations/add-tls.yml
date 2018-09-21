@@ -1,0 +1,29 @@
+# TODO: not finished
+# export EXTERNAL_IP=
+# bosh -d oauth2_proxy deploy manifest/oauth2-proxy.yml -o manifest/add-public-ip.yml -o manifest/add-tls.yml -v oauth2_proxy-external_ip=${EXTERNAL_IP} --no-redact
+
+- type: replace
+  path: /variables?/-
+  value:
+    name: oauth_proxy_ca
+    type: certificate
+    options:
+      is_ca: true
+      common_name: ca
+
+- type: replace
+  path: /variables?/-
+  value:
+    name: oauth2_proxy_tls
+    type: certificate
+    options:
+      ca: oauth_proxy_ca
+      common_name: 127.0.0.1
+      alternative_names:
+      - ((oauth2_proxy-external_ip))
+
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/properties/tls?
+  value:
+    certificate: ((oauth2_proxy_tls.certificate))
+    private_key: ((oauth2_proxy_tls.private_key))

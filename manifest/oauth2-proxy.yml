@@ -1,0 +1,64 @@
+---
+# example manifest
+
+name: oauth2-proxy
+
+releases:
+- name: oauth2-proxy
+  version: latest
+
+stemcells:
+- os: ubuntu-trusty
+  alias: default
+  version: latest
+
+update:
+  canaries: 1
+  canary_watch_time: 30000-600000
+  max_in_flight: 3
+  update_watch_time: 5000-600000
+
+
+instance_groups:
+- azs: [z1, z2, z3]
+  instances: 1
+  stemcell: ubuntu-trusty
+  vm_type: medium
+  jobs:
+  - name: oauth2_proxy
+    release: oauth2-proxy
+  - name: nginx-lua
+    release: oauth2-proxy
+  name: oauth2_proxy
+  networks:
+  - name: default
+  properties:
+    oauth2_proxy:
+      client_id: "((oauth2_proxy-client_id))"
+      client_secret: "((oauth2_proxy-client_secret))"
+      cookie_name: "_oauth2_proxy"
+      cookie_refresh: "1h"
+      cookie_secret: "((oauth2_proxy-cookie_secret))"
+      email_domain: ((oauth2_proxy-domains))
+      http_address: "0.0.0.0:80"
+      redirect_url: "((oauth2_proxy-url))/oauth2/callback"
+      upstream: "http://127.0.0.1:9090"
+    nginx-lua:
+      sites:
+      - name: "kibana-proxy"
+        config: |
+          server {
+            listen 127.0.0.1:9090;
+            location / {
+              # The location of our Kibana server (this is default)
+              proxy_pass ((oauth2_proxy-upstream));
+              # Send a Basic auth header to Kibana on every request to get past the log - in UI.
+              # "bmdpbng6c2VjcmV0cGFzc3dvcmQ="is a base64 encoded string of my service account 's credentials "nginx:secretpassword"
+              proxy_set_header Authorization "((oauth2_proxy-upstream-basic-auth))";
+              # Also submit the 'es-security-runas-user'header on every request with a value of X - Forwarded - User sent from the downstream oauth2_proxy.
+              # X-Forwarded-User would be 'user1' if the Google account was user1@domain.co
+              proxy_set_header es-security-runas-user $http_x_forwarded_user;
+              # Simple rewrite to get us back to oauth2_proxy 's login page if someone uses Logout button.
+              rewrite ^/logout$ ((oauth2_proxy-url))/oauth2/sign_in redirect;
+            }
+          }

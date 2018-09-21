@@ -1,0 +1,4 @@
+---
+dev_name: oauth2-proxy
+blobstore:
+  provider: local

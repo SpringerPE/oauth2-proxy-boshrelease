@@ -1,0 +1,26 @@
+---
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/networks/0/name?
+  value:
+    ((network_name))
+
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/azs?
+  value:
+    ((azs))
+
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/vm_type?
+  value:
+    ((vm_type))
+
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/instances?
+  value:
+    ((instances))
+
+- type: replace
+  path: /instance_groups/name=oauth2_proxy/vm_extensions?
+  value:
+    ((vm_extensions))
+

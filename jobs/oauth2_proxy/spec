@@ -1,0 +1,45 @@
+---
+name: oauth2_proxy
+
+description: proxy for oauth2
+
+templates:
+  bin/ctl.erb: bin/ctl
+  data/properties.sh.erb: data/properties.sh
+
+packages:
+- oauth2_proxy
+- bosh-helpers
+
+properties:
+  oauth2_proxy.provider:
+    description: "Provider of the oauth service"
+    example: "google, github, facebook"
+    default: google
+  oauth2_proxy.client_id:
+    description: "client id of the service provider"
+  oauth2_proxy.http_address:
+    description: "fmt ip:port or :port where the oauth deamon is running"
+    default: ":80"
+  oauth2_proxy.client_secret:
+    description: ""
+  oauth2_proxy.email_domain:
+    description: "List of domains registered with oauth service provider"
+    example: "[ yourcompanydomain.com ]"
+    default: [ "*" ]
+  oauth2_proxy.cookie_name:
+    description: "the name of the cookie that the oauth_proxy creates"
+    default: _oauth2_proxy
+  oauth2_proxy.cookie_secret:
+    description: "the seed string for secure cookies (optionally base64 encoded)"
+  oauth2_proxy.cookie_refresh:
+    description: "refresh the cookie after this duration; 0 to disable"
+    default: 1h
+  oauth2_proxy.upstream:
+    description: "the http url(s) of the upstream endpoint or file:// paths for static files. Routing is based on the path"
+  oauth2_proxy.redirect_url:
+    description: "the OAuth Redirect URL"
+    example: "https://internalapp.yourcompany.com/oauth2/callback"
+  oauth2_proxy.cookie_secure:
+    description: "enable htpps/http for the cookie"
+    default: "false"

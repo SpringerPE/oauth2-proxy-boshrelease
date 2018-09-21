@@ -1,0 +1,5 @@
+instances: 1
+network_name: default
+vm_type: medium
+azs: [z1, z2, z3]
+vm_extensions: []

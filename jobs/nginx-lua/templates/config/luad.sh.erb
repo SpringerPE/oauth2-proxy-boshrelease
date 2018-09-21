@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#
+set -e # exit immediately if a simple command exits with a non-zero status
+
+# WARN: execute this script on the config folder, where a new program file
+# for each entry will be created.
+# Lua program files
+
+# Go to the lua folder
+[ "$#" != "1" ] && echo "Arg <folder> not provided!" && exit 1
+
+pushd "$1"
+  # Delete all configuration and recreate it
+  rm -f *
+
+<% if_p("nginx-lua.lua") do %>
+  <% p("nginx-lua.lua", []).each do |program| %>
+    <% if program["content"] != nil && program["content"] != '' %>
+      <% if program["content"].start_with? '/var/vcap' %>
+  # Link to another job/package
+  ln -sf "<%= program["content"] %>" "<%= program["name"] %>.lua"
+      <% else %>
+  cat <<'LUAP' > "<%= program["name"] %>.lua"
+<%= program["content"] %>
+LUAP
+      <% end %>
+    <% end %>
+  <% end %>
+<% end %>
+
+popd
+

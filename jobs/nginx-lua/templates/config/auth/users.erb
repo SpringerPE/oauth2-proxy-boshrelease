@@ -1,0 +1,3 @@
+# Include with auth_basic_user_file auth/registry;
+<% p("nginx-lua.basic_auth", []).each do |userpass| %><%= userpass %>
+<% end %>

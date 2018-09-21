@@ -1,0 +1,62 @@
+# user vcap;
+daemon on;
+# pid /var/vcap/sys/run/nginx-lua/nginx-lua.pid;
+error_log /var/vcap/sys/log/nginx-lua/error.log <%= p('nginx-lua.loglevel', 'error') %>;
+
+worker_processes <%= p('nginx-lua.workers', 'auto') %>;
+worker_priority <%= p('nginx-lua.workers_priority', '0') %>;
+
+working_directory /var/vcap/data/tmp/nginx-lua;
+
+events {
+    worker_connections 8192;
+    use epoll;
+}
+
+http {
+    # Basic settings
+    server_tokens off;
+
+    sendfile on;
+    sendfile_max_chunk 256m;
+    directio 5m;
+
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout <%= p('nginx-lua.keepalive_timeout', '75s') %> <%= p('nginx-lua.keepalive_timeout_header', '20s') %>;
+    keepalive_requests 512;
+    connection_pool_size 256;
+
+    # Temp path
+    client_body_temp_path /var/vcap/data/tmp/nginx-lua/client_body;
+    proxy_temp_path /var/vcap/data/tmp/nginx-lua/proxy;
+    fastcgi_temp_path /var/vcap/data/tmp/nginx-lua/fastcgi;
+    uwsgi_temp_path /var/vcap/data/tmp/nginx-lua/uwsgi;
+    scgi_temp_path /var/vcap/data/tmp/nginx-lua/scgi;
+
+    include /var/vcap/jobs/nginx-lua/config/mime.types;
+    default_type text/html;
+
+    <% if_p("nginx-lua.lua") do %>
+    # Lua options
+    lua_package_path /var/vcap/jobs/nginx-lua/config/lua/?.lua;
+    lua_code_cache on;
+    <% end %>
+
+    # Gzip module options
+    gzip on;
+    gzip_min_length 1250;
+    gzip_comp_level 2;
+    gzip_proxied off;
+    gzip_types text/plain text/css application/javascript application/x-javascript text/xml application/xml text/javascript;
+    gzip_vary on;
+
+    # Log format
+    log_format timed_combined '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_time $upstream_response_time $pipe';
+    <% if_p("nginx-lua.access_log") do |access| %>
+    access_log /var/vcap/sys/log/nginx-lua/access.log <%= p('access') %>;
+    <% end.else do %>
+    access_log off;
+    <% end %>
+    include /var/vcap/jobs/nginx-lua/config/sites/*;
+}

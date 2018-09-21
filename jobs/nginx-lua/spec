@@ -1,0 +1,91 @@
+---
+name: nginx-lua
+
+description: Nginx-lua configuration
+
+templates:
+  bin/ctl: bin/ctl
+  bin/pre-start: bin/pre-start
+  data/properties.sh.erb: data/properties.sh
+  data/env.sh.erb: data/env.sh
+  config/nginx.conf.erb: config/nginx.conf
+  config/confd.sh.erb: config/confd.sh
+  config/luad.sh.erb: config/luad.sh
+  config/mime.types: config/mime.types
+  config/auth/users.erb: config/auth/users
+  config/certs/key.erb: config/certs/key.pem
+  config/certs/cert.erb: config/certs/crt.pem
+
+packages:
+- luajit
+- nginx-lua
+
+consumes:
+- name: nginx-lua
+  type: peers
+  optional: true
+
+provides:
+- name: nginx-lua
+  type: peers
+  properties:
+  - nginx-lua.env
+
+properties:
+  nginx-lua.loglevel:
+    description: Error loglevel
+    default: error
+  nginx-lua.access_log:
+    description: Enable access_log type
+    example: timed_combined 
+  nginx-lua.workers:
+    description: Number of worker processes
+    default: auto
+  nginx-lua.workers_priority:
+    description: Priority of the worker processes
+    default: 0
+  nginx-lua.keepalive_timeout:
+    description: Time to keep a keep-alive connection open
+    default: 75s
+  nginx-lua.keepalive_timeout_header:
+    description: Show Keep-alive header
+    default: 20s
+
+  nginx-lua.basic_auth:
+    description: |
+      List of user:password to define basic auth by including the file
+      'auth_basic_user_file auth/registry;'". The format of each user is
+      "user:password" (for passwords encrypted with 'htpasswd'). If you want
+      to use plain passwords then the format is "user:{PLAIN}password"
+    default: []
+  nginx-lua.lua:
+    description: |
+      List of lua programs. You can define as many lua files as you need. Each entry
+      within "content" key will be a file. Note you can use full paths to other
+      lua files provided by other jobs, just indicating the full path: /var/vcap ...
+      Keys required for each entry: 'name' and 'content'
+  nginx-lua.sites:
+    description: |
+      List of nginx vhots. You can define as many config files as you need. Each entry
+      within "config" key will be a file. Note you can use full paths to other
+      nginx config files provided by other jobs, just indicating the full path: /var/vcap ...
+      Keys required for each entry: 'name' and 'config'
+    default: []
+  nginx-lua.tls_key:
+    description: |
+      The TLS key in PEM format. Its location is 'certs/key.pem',
+      also available as env variable "${TLS_KEY}".
+  nginx-lua.tls_crt:
+    description: |
+      This is the chained TLS certificate for the website; This is in PEM
+      format.  The topmost certificate should be the certificate for the
+      website itself.  (e.g. in the case of sslip.io, the certificate for
+      sslip.io). The second-from-top certificate should be the intermediate
+      certificate (e.g.  "COMODO RSA Domain Validation Secure Server CA"). If
+      there is another intermediate certificate, that should follow (e.g.
+      "COMODO RSA Certification Authority").  There is no reason to include the
+      root certificate, but there is no harm in including it either. It should
+      be the last certificate (bottom-most). Its location is 'certs/crt.pem',
+      also available as env variable "${TLS_CRT}".
+  nginx-lua.env:
+    description: A hash of environment variables

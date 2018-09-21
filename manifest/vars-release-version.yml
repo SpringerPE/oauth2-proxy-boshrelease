@@ -1,0 +1,5 @@
+release:
+  name: oauth2-proxy
+  url: https://github.com/SpringerPE/oauth2-proxy-boshrelease/releases/download/v1.0/oauth2-proxy-1.0.tgz
+  version: 1.0
+  sha1: 0325fc3f26f32cbbe09edbcc2d57dca704a35aa2

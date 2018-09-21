@@ -1,0 +1,5 @@
+check process nginx-lua
+  with pidfile /var/vcap/sys/run/nginx-lua/nginx-lua.pid
+  start program "/var/vcap/jobs/nginx-lua/bin/ctl start"
+  stop program "/var/vcap/jobs/nginx-lua/bin/ctl stop"
+  group vcap

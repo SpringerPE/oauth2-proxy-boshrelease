@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# abort script on any command that exits with a non zero value
+set -e -x
+
+# Grab the latest versions that are in the directory
+ZLIB_VERSION=$(ls -v -r nginx-lua/zlib-*.tar.gz | sed 's/.*\/zlib-\(.*\)\.tar\.gz$/\1/' | head -1)
+NGINX_NDK_VERSION=$(ls -v -r nginx-lua/ngx_devel_kit-*.tar.gz | sed 's/.*\/ngx_devel_kit-\(.*\)\.tar\.gz$/\1/' | head -1)
+NGINX_LUA_VERSION=$(ls -v -r nginx-lua/lua-nginx-module-*.tar.gz | sed 's/.*\/lua-nginx-module-\(.*\)\.tar\.gz$/\1/' | head -1)
+NGINX_PCRE_VERSION=$(ls -v -r nginx-lua/pcre-*.tar.gz | sed 's/.*\/pcre-\(.*\)\.tar\.gz$/\1/' | head -1)
+NGINX_HEADERS_VERSION=$(ls -v -r nginx-lua/headers-more-nginx-module-*.tar.gz | sed 's/.*\/headers-more-nginx-module-\(.*\)\.tar\.gz$/\1/' | head -1)
+NGINX_VERSION=$(ls -v -r nginx-lua/nginx-*.tar.gz | sed 's/.*\/nginx-\(.*\)\.tar\.gz$/\1/' | head -1)
+BOSH_PACKAGES_DIR=${BOSH_PACKAGES_DIR:-/var/vcap/packages}
+
+
+echo "Extracting zlib ${ZLIB_VERSION} ... "
+tar xzvf "nginx-lua/zlib-${ZLIB_VERSION}.tar.gz"
+
+echo "Extracting NDK ${NGINX_NDK_VERSION} ..."
+tar xzvf nginx-lua/ngx_devel_kit-${NGINX_NDK_VERSION}.tar.gz
+
+echo "Extracting Lua Nginx module ${NGINX_LUA_VERSION} ..."
+tar xzvf nginx-lua/lua-nginx-module-${NGINX_LUA_VERSION}.tar.gz
+
+echo "Extracting pcre ${NGINX_PCRE_VERSION} ..."
+tar xzvf nginx-lua/pcre-${NGINX_PCRE_VERSION}.tar.gz
+
+echo "Extracting headers-more ${NGINX_HEADERS_VERSION} module..."
+tar xzvf nginx-lua/headers-more-nginx-module-${NGINX_HEADERS_VERSION}.tar.gz
+
+echo "Extracting nginx ${NGINX_VERSION} ..."
+tar xzvf nginx-lua/nginx-${NGINX_VERSION}.tar.gz
+
+echo "Building nginx..."
+export LUAJIT_LIB=/var/vcap/packages/luajit/lib
+export LUAJIT_INC=/var/vcap/packages/luajit/include/luajit-2.0
+
+pushd nginx-${NGINX_VERSION}
+  ./configure \
+    --prefix=${BOSH_INSTALL_TARGET} \
+    --with-ld-opt="-Wl,-rpath,$LUAJIT_LIB" \
+    --with-pcre=../pcre-${NGINX_PCRE_VERSION} \
+    --with-zlib=../zlib-${ZLIB_VERSION} \
+    --add-module=../headers-more-nginx-module-${NGINX_HEADERS_VERSION} \
+    --add-module=../ngx_devel_kit-${NGINX_NDK_VERSION} \
+    --add-module=../lua-nginx-module-${NGINX_LUA_VERSION} \
+    --with-http_dav_module \
+    --with-http_realip_module \
+    --with-http_ssl_module \
+    --with-http_gunzip_module \
+    --with-http_v2_module \
+    --with-stream \
+    --with-threads \
+    --with-stream_ssl_module \
+    --with-http_slice_module \
+    --with-http_stub_status_module
+  make
+  make install
+popd
+

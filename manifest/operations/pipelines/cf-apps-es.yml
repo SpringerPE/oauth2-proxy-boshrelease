@@ -1,0 +1,682 @@
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/conf?/xpack.management.pipeline.id?/-
+  value:
+    "cf-apps-es"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/env?/DST_HOSTS?
+  value:
+    "((es-host))"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/env/ES_USER?
+  value:
+    "((es-user))"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/env/ES_PASSWORD?
+  value:
+    "((es-password))"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/env/ES_INDEX_PREFIX?
+  value:
+    "((es-index_prefix))"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/env/CF_API?
+  value:
+    "((cf-api))"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/env/SOURCE_ENV?
+  value:
+    "((source-env))"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/env/SOURCE_PLATFORM?
+  value:
+    "((source-platform))"
+
+- type: replace
+  path: /instance_groups/name=logstash/properties/logstash/pipelines?
+  value:
+    - name: cf-apps-es
+      config:
+        filter-00-prefiltering: |
+          ##-------------
+          # Pre filtering
+          ##-------------
+          
+          filter {
+              mutate {
+                  # Replace the unicode empty character \u0000 with ""
+                  gsub => [ "message", '\u0000', ""]
+          
+                  # Trim excess whitespace
+                  strip => [ "message" ]
+              }
+          
+              # Drop empty useless logs
+              if [message] =~ /^\s*$/ or [message] =~ /^#.*$/ {
+                  drop { }
+              }
+          
+              mutate {
+                  rename => { "message" => "@message" }
+          
+                  # Add tags to track which job processed this event
+                  add_field => {
+                          "[@parser][job]" => "${JOB_FULL_AZ_DEPLOYMENT}"
+                          "[@parser][instance]" => "${INSTANCE_ID}"
+                          "[@parser][az]" => "${JOB_AZ}"
+                          "[@parser][name]" => "${JOB_NAME}"
+                          "[@parser][index]" => "${JOB_INDEX}"
+                          "[@parser][deployment]" => "${DEPLOYMENT_NAME}"
+                          "[@parser][lb-host]" => "%{host}"
+                          "[@parser][lb-port]" => "%{port}"
+                  }
+          
+                  # When behind LB, this is always the IP of the haproxy, not the IP of the actual host sending the data.
+                  # Remove it to avoid confusion
+                  remove_field => [ "host", "port" ]
+              }
+          }
+        filter-10-syslog_rfc5424_parsing: |
+          ##------------------------
+          # standard rfc5424 parsing
+          ##------------------------
+          
+          # NOTE: All parsed data should include @message, @level and @source.component.
+          # Otherwise these fields are set from syslog_ fields in teardown script afterwards.
+          
+          filter {
+              if ([@input] == "syslog") {
+              grok {
+                  match => { "@message" => "%{POSINT:syslog_code} %{SYSLOG5424LINE}" }
+                  add_tag => [ "syslog-5424" ]
+                  add_field => {
+                          "@type" => "LogMessage"
+                          "@raw" => "%{@message}"
+                  }
+                  tag_on_failure => ["fail/syslog-5424/grok"]
+              }
+          
+              #                "@level" => "NONE"
+          
+              syslog_pri {
+                  syslog_pri_field_name => "syslog5424_pri"
+              }
+          
+              date {
+                  match => [ "syslog5424_ts", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss", "ISO8601" ]
+                  timezone => "UTC"
+                  remove_field => "syslog5424_ts"
+              }
+          
+              mutate {
+                  # '@message' should contain the remaining unparsed text
+                  rename => { "syslog5424_msg" => "@message" }
+              }
+          
+          
+              # Extract instance metadata from structured data
+              grok {
+                  match => { "syslog5424_host" => "(?<org>[a-zA-Z0-9_-]+)\.(?<space>[a-zA-Z0-9_-]+)\.(?<app>[a-zA-Z0-9_-]+)" }
+                  tag_on_failure => [ "fail/syslog-5424/cf/grok" ]
+                  add_tag => [ "cf" ]
+              }
+              if !("fail/syslog-5424/cf/grok" in [tags]) {
+                  mutate {
+                      rename => {
+                          "org" => "[@cf][org]"
+                          "space" => "[@cf][space]"
+                          "app" => "[@cf][app]"
+                      }
+                      add_field => {
+                          "[@cf][app_id]" => "%{syslog5424_app}"
+                          "[@cf][api]" => "${CF_API:cf}"
+                      }
+                  }
+              }
+          
+          
+              # Extract instance index from proc
+              grok {
+                  match => { "syslog5424_proc" => "\[%{DATA:[@metadata][app_source]}\]" }
+                  tag_on_failure => [ "fail/syslog-5424/proc/grok" ]
+              }
+              if !("fail/syslog-5424/proc/grok" in [tags]) {
+                  mutate {
+                      # split the field on /
+                      split => { "[@metadata][app_source]" => "/" }
+                      # save the last element of the array as the app_source.
+                      add_field => {
+                          "[@source][host]" => "%{syslog5424_host}"
+                          "[@source][type]" => "%{[@metadata][app_source][0]}"
+                          "[@source][subtype]" => "none"
+                          "[@source][src]" => "unknown"
+                          "[@source][component]" => "${SOURCE_COMPONENT:LogMessage}"
+                          "[@source][platform]" => "${SOURCE_PLATFORM:cf}"
+                          "[@source][env]" => "${SOURCE_ENV:cf}"
+                          "[@source][instance]" => "%{[@metadata][app_source][-1]}"
+                          "[@source][shipper]" => "${SOURCE_SHIPPER:syslog}"
+          
+                          "[@shipper][proto]" => "%{@input}"
+                          "[@shipper][code]" => "%{syslog_code}"
+                          "[@shipper][version]" => "%{syslog5424_ver}"
+                          "[@shipper][facility]" => "%{syslog_facility_code}"
+                          "[@shipper][priority]" => "%{syslog5424_pri}"
+                          "[@shipper][severity]" => "%{syslog_severity_code}"
+                          "[@shipper][name]" => "${SOURCE_SHIPPER:syslog}"
+                          "[@shipper][type]" => "%{[@metadata][app_source]}"
+                          "[@shipper][host]" => "%{[syslog5424_host]}"
+          
+                          "@generator" => "%{[@metadata][app_source][0]}"
+                          "@instance" => "%{[@metadata][app_source][-1]}"
+                      }
+                  }
+                  ruby {
+                      code => 'if event.get("[@metadata][app_source]").length > 2 then event.set("[@source][subtype]", event.get("[@metadata][app_source][1]")) end'
+                  }
+                  if [syslog5424_pri] == "14" {
+                      mutate {
+                          replace => { "[@source][src]" => "stdout" }
+                          add_tag => [ "stdout" ]
+                      }
+                  } else if [syslog5424_pri] == "11" {
+                      mutate {
+                          replace => { "[@source][src]" => "stderr" }
+                          add_tag => [ "stderr" ]
+                      }
+                  }
+                  mutate {
+                      convert => {
+                          "[@source][instance]" => "integer"
+                          "@instance" => "integer"
+                      }
+                      lowercase => [ "[@source][type]", "[@source][subtype]", "[@source][component]" ]
+                      split => { "[@shipper][type]" => "," }
+                      convert => {
+                          "[@shipper][version]" => "integer"
+                          "[@shipper][facility]" => "integer"
+                          "[@shipper][code]" => "integer"
+                          "[@shipper][priority]" => "integer"
+                          "[@shipper][severity]" => "integer"
+                      }
+                      remove_field => [ "syslog5424_ver", "syslog5424_pri", "syslog5424_proc", "syslog5424_app", "syslog5424_host", "syslog_code" ]
+                  }
+              }
+            }
+          }
+        filter-20-set-metadata-index: |
+          ##---------
+          # Set index
+          ##---------
+          
+          # @index_type stores type of index: app/platform
+          # [@metadata][index] stores full index prefix (for app logs additionally includes org and space name)
+          
+          filter {
+              # by default logs go to 'apps'
+              mutate {
+                  add_field => {
+                      "@index_type" => "app"
+                      "[@metadata][index]" => "cf"
+                  }
+              }
+          
+              # Override @metadata.index
+              if [@cf][org] {
+                  mutate { replace => { "[@metadata][index]" => "%{[@metadata][index]}-%{[@cf][org]}" } }
+                  if [@cf][space] {
+                      mutate { replace => { "[@metadata][index]" => "%{[@metadata][index]}-%{[@cf][space]}" } }
+                  }
+                  mutate { lowercase => [ "[@metadata][index]" ] }
+              }
+          }
+          
+        filter-50-rtr-logmessages: |
+          ##----------------
+          # Parsing RTR logs
+          ##----------------
+          
+          filter {
+              if ([@type] == "LogMessage" and [@source][type] == "rtr") {
+          
+                  mutate {
+                      add_tag => [ "rtr" ]
+                  }
+          
+                  grok {
+                    match => { "@message" => "%{HOSTNAME:[rtr][hostname]} - \[(?<rtr_time>%{YEAR}-%{MONTHNUM}-%{MONTHDAY}T%{TIME}+%{INT})\] \"%{WORD:[rtr][verb]} %{URIPATHPARAM:[rtr][path]} %{PROG:[rtr][http_spec]}\" %{BASE10NUM:[rtr][status]:int} %{BASE10NUM:[rtr][request_bytes_received]:int} %{BASE10NUM:[rtr][body_bytes_sent]:int} \"%{GREEDYDATA:[rtr][referer]}\" \"%{GREEDYDATA:[rtr][http_user_agent]}\" \"%{IPORHOST:[rtr][src][host]}:%{POSINT:[rtr][src][port]:int}\" \"%{IPORHOST:[rtr][dst][host]}:%{POSINT:[rtr][dst][port]:int}\" x_forwarded_for:\"%{GREEDYDATA:[rtr][x_forwarded_for]}\" x_forwarded_proto:\"%{GREEDYDATA:[rtr][x_forwarded_proto]}\" vcap_request_id:\"%{NOTSPACE:[rtr][vcap_request_id]}\" response_time:%{NUMBER:[rtr][response_time_sec]:float} app_id:\"%{NOTSPACE:[rtr][app][id]}\" app_index:\"%{BASE10NUM:[rtr][app][index]:int}\" %{GREEDYDATA:[@metadata][rtr_extra]}" }
+                    tag_on_failure => [ "fail/cloudfoundry/logMessage/rtr/grok" ]
+                  }
+          
+                  if !("fail/cloudfoundry/logMessage/rtr/grok" in [tags]) {
+                      # Set [rtr][timestamp]
+                      mutate {
+                        rename => { "rtr_time" => "[rtr][timestamp]" }
+                      }
+                      # Set [rtr][x_forwarded_for]
+                      mutate {
+                          gsub => ["[rtr][x_forwarded_for]","[\s\"]",""]  # remove quotes and whitespace
+                          split => ["[rtr][x_forwarded_for]", ","]        # format is client, proxy1, proxy2 ...
+                      }
+                      # Set [rtr][remote_addr]
+                      mutate {
+                        add_field => ["[rtr][remote_addr]", "%{[rtr][x_forwarded_for][0]}"]
+                      }
+                      if [rtr][remote_addr] =~ /([0-9]{1,3}\.){3}[0-9]{1,3}/ {
+                          geoip {
+                            source => "[rtr][remote_addr]"
+                          }
+                      }
+                      # Set [rtr][response_time_ms]
+                      mutate {
+                        add_field => { "[rtr][response_time_ms]" => "%{[rtr][response_time_sec]}000" }
+                      }
+                      mutate {
+                        gsub => ["[rtr][response_time_ms]", "\.(\d)(\d)(\d)([\d]{0,3}).*","\1\2\3.\4"]
+                      }
+                      mutate {
+                        convert => { "[rtr][response_time_ms]" => "float" }
+                      }
+                      # Set @message
+                      mutate {
+                        replace => {"@message" => "%{[rtr][status]} %{[rtr][verb]} %{[rtr][path]} (%{[rtr][response_time_ms]} ms)"}
+                      }
+                      # Parsing extra headers like zipkin ...
+                      kv {
+                        source => "[@metadata][rtr_extra]"
+                        target => "[rtr][extra]"
+                        value_split => ":\\\""
+                        trim_value => "\\""
+                      }
+                      if [rtr][status] >= 400 {
+                          mutate {
+                            replace => { "@level" => "ERROR" }
+                          }
+                      } else {
+                          mutate {
+                            replace => { "@level" => "INFO" }
+                          }
+                      }
+                  }
+              }
+          }
+        filter-52-api-logmessages: |
+          ##-----------------------------
+          ## Parses LogMessage API events
+          ##-----------------------------
+          
+          filter {
+              if ( [@type] == "LogMessage" and [@source][type] == "api" ) {
+          
+                  mutate {
+                      add_tag => [ "api" ]
+                  }
+          
+                  grok {
+                    match => { "@message" => "%{UUID:[api][uuid]}%{SPACE}\({%{DATA:[api][data]}}\)" }
+                    tag_on_failure => [ "fail/cloudfoundry/logMessage/api/grok" ]
+                  }
+                  if !("fail/cloudfoundry/logMessage/api/grok" in [tags]) {
+                      kv {
+                          source => "[api][data]"
+                          field_split_pattern => "=>"
+                          target => "[api][json]"
+                          trim_key => "\\\""
+                          trim_value => ">\\\""
+                      }
+                  }
+              }
+          }
+          
+        filter-54-app-logmessages: |
+          ##-----------------------------
+          ## Parses LogMessage APP events
+          ##-----------------------------
+          
+          filter {
+              if [@type] == "LogMessage" and [@source][type] == "app" {
+          
+                  mutate {
+                      add_tag => [ "app" ]
+                  }
+          
+                  # Parse application logs based on msg format.
+                  # Marks unknown format with [unknown_msg_format] tag.
+          
+                  ## ---- Format 1: JSON
+                  if [@message] =~ /^\s*{.*}\s*$/ {                              # if it looks like JSON
+                      json {
+                        source => "@message"
+                        target => "app"
+                        add_tag => [ "json" ]
+                        tag_on_failure => [ "no_json" ]
+                      }
+                      if ("json" in [tags]) {
+                          # @level
+                          if [app][level] {
+                              mutate {
+                                replace => { "@level" => "%{[app][level]}" }
+                              }
+                          }
+                          if [app][log_level] {
+                              translate {
+                                field => "[app][log_level]"
+                                dictionary => [ "0", "DEBUG", "1", "INFO", "2", "ERROR", "3", "FATAL" ]
+                                destination => "@level"
+                                override => true
+                                fallback => "%{[app][log_level]}"
+                              }
+                          }
+                          # set @timestamp from event's timestamp if it is passed
+                          if [app][time] {
+                              # if event's timestamp is not passed then we set @timestamp = event shipping time from firehose-to-syslog
+                              date {
+                                match => [ "[app][time]", "ISO8601" ]
+                                tag_on_failure => [ "fail/app/json/time" ]
+                              }
+                          }
+                          if [app][epoch] {
+                              date {
+                                match => [ "[app][epoch]", "UNIX", "UNIX_MS" ]
+                                tag_on_failure => [ "fail/app/json/epoch" ]
+                              }
+                          }
+                          if [app][timestamp] {
+                              date {
+                                match => [ "[app][timestamp]", "ISO8601", "UNIX", "UNIX_MS" ]
+                                tag_on_failure => [ "fail/app/json/timestamp" ]
+                              }
+                          }
+                      }
+                  ## ---- Format 2: "[CONTAINER] .." (Tomcat logs)
+                  } else if [@message] =~ /^\s*\[CONTAINER\]/ {
+                      # Tomcat specific parsing (in accordance with https://github.com/cloudfoundry/java-buildpack-support/blob/master/tomcat-logging-support/src/main/java/com/gopivotal/cloudfoundry/tomcat/logging/CloudFoundryFormatter.java)
+                      grok {
+                        match => { "@message" => "(?<app_logger>\[CONTAINER\]%{SPACE}%{NOTSPACE})%{SPACE}%{LOGLEVEL:@level}%{SPACE}%{GREEDYDATA:@message}" }
+                        overwrite => [ "@message", "@level" ]
+                        add_tag => [ "tomcat" ]
+                        tag_on_failure => [ "no_tomcat" ]
+                      }
+                      mutate {
+                        rename => { "app_logger" => "[app][logger]" }
+                      }
+          
+                  ## ---- Format 3: Logback status logs
+                  } else {
+                      grok {
+                        match => { "@message" => "%{TIME} \|\-%{LOGLEVEL:@level} in %{NOTSPACE:[app][logger]} - %{GREEDYDATA:@message}" }
+                        overwrite => [ "@message", "@level" ]
+                        tag_on_failure => [ "unknown" ]
+                      }
+                  }
+              }
+          }
+          
+        filter-56-cell-logmessages: |
+          ##------------------------------
+          ## Parses LogMessage Cell events
+          ##------------------------------
+          
+          # Track issues with application instances
+          
+          filter {
+              if ([@type] == "LogMessage" and [@source][type] == "cell") {
+          
+                  mutate {
+                      add_tag => [ "cell" ]
+                  }
+          
+                  grok {
+                    match => { "@message" => "Cell %{UUID:[cell][uuid]} (?<words>.*) (?<cellinstance>[A-Fa-f0-9]{8}-(?:[A-Fa-f0-9]{4}-){3}[A-Fa-f0-9]{4})" }
+                    tag_on_failure => [ "fail/cloudfoundry/logMessage/cell/grok" ]
+                    add_field => { "[cell][instance]" => "%{cellinstance}" }
+                    remove_field => [ "cellinstance" ]
+                  }
+          
+                  if !("fail/cloudfoundry/logMessage/cell/grok" in [tags]) {
+                      mutate {
+                          split => { "words" => " " }
+                      }
+                      mutate {
+                          lowercase => [ "words[0]" ]
+                          add_field => { "[cell][subject]" => "container" }
+                      }
+          
+                      if "destroying" in [words] {
+                        mutate {
+                            add_field => {
+                               "[cell][action]" => "destroy"
+                               "[cell][result]" => "running"
+                            }
+                        }
+                      } else if "destroyed" in [words] {
+                          if "successfully" in [words] {
+                            mutate {
+                                add_field => {
+                                  "[cell][result]" => "ok"
+                                  "[cell][action]" => "destroy"
+                                }
+                            }
+                          } else {
+                            mutate {
+                                add_field => {
+                                  "[cell][result]" => "unknown"
+                                  "[cell][action]" => "destroy"
+                                }
+                            }
+                          }
+                      } else if "creating" in [words] {
+                        mutate {
+                            add_field => {
+                               "[cell][action]" => "create"
+                               "[cell][result]" => "running"
+                            }
+                        }
+                      } else if "created" in [words] {
+                          if "successfully" in [words] {
+                            mutate {
+                                add_field => {
+                                  "[cell][result]" => "ok"
+                                  "[cell][action]" => "create"
+                                }
+                            }
+                          } else {
+                            mutate {
+                                add_field => {
+                                  "[cell][result]" => "unknown"
+                                  "[cell][action]" => "create"
+                                }
+                            }
+                          }
+                      } else if "stopping" in [words] {
+                        mutate {
+                            add_field => {
+                               "[cell][action]" => "stop"
+                               "[cell][result]" => "running"
+                            }
+                        }
+                      } else {
+                        mutate {
+                            add_field => {
+                                "[cell][action]" => "other"
+                                "[cell][result]" => "unknown"
+                            }
+                        }
+                      }
+                      mutate {
+                          remove_field => [ "words" ]
+                      }
+                  } else {
+                      mutate {
+                          remove_tag => [ "fail/cloudfoundry/logMessage/cell/grok" ]
+                      }
+                  }
+              }
+          }
+          
+        filter-58-ssh-logmessages: |
+          ##-----------------------------
+          ## Parses LogMessage SSH events
+          ##-----------------------------
+          
+          filter {
+              if ( [@type] == "LogMessage" and [@source][type] == "ssh" ) {
+          
+                  mutate {
+                      add_tag => [ "ssh" ]
+                  }
+          
+                  grok {
+                    match => { "@message" => "%{IP:[ssh][ip]}:%{POSINT:[ssh][port]}" }
+                    tag_on_failure => [ "fail/cloudfoundry/logMessage/ssh/grok" ]
+                  }
+                  if !("fail/cloudfoundry/logMessage/ssh/grok" in [tags]) {
+                      if [@message] =~ / ended / {
+                        mutate {
+                            add_field => { "[ssh][action]" => "end" }
+                        }
+                      } else {
+                        mutate {
+                            add_field => { "[ssh][action]" => "start" }
+                        }
+                      }
+                  }
+              }
+          }
+          
+        filter-59-lgr-logmessages: |
+          ##------------------------------
+          ## Parses LogMessage Loggregator
+          ##------------------------------
+          
+          filter {
+              if ( [@type] == "LogMessage" and [@source][type] == "lgr" ) {
+          
+                  mutate {
+                      add_tag => [ "lgr" ]
+                  }
+          
+              }
+          }
+          
+        filter-90-set_syslog_level: |
+          ##-------------------
+          # define syslog level
+          ##-------------------
+          
+          # Apply default settings for mandatory fields (if not set)
+          
+          filter {
+              # set syslog @level (if @level is not set yet)
+              if ![@level] and [syslog_severity_code] {
+                  if [syslog_severity_code] <= 3 {                # 0-Emergency, 1-Alert, 2-Critical, 3-Error
+                      mutate {
+                          add_field => { "@level" => "ERROR" }
+                      }
+                  } else if [syslog_severity_code] <= 5 {         # 4-Warning, 5-Notice
+                      mutate {
+                          add_field => { "@level" => "WARN" }
+                      }
+                  } else if [syslog_severity_code] == 6 {         # 6-Informational
+                      mutate {
+                          add_field => { "@level" => "INFO" }
+                      }
+                  } else if [syslog_severity_code] == 7 {         # 7-Debug
+                      mutate {
+                          add_field => { "@level" => "DEBUG" }
+                      }
+                  }
+              } else {
+                  mutate {
+                      uppercase => [ "@level" ]
+                  }
+              }
+          }
+          
+          
+        filter-99-cleanup: |
+          ##--------------------------
+          # Cleanup unnecessary fields
+          ##--------------------------
+          
+          filter {
+              mutate {
+                  # Remove syslog_ fields
+                  remove_field => "syslog_facility"
+                  remove_field => "syslog_facility_code"
+                  remove_field => "syslog_severity"
+                  remove_field => "syslog_severity_code"
+          
+                  # Cleanup
+                  remove_field => "@version"
+              }
+          }
+          
+        input-10-syslog: |
+          input {
+              tcp {
+                add_field => [ "@input", "syslog" ]
+                id => "input-syslog/${JOB_FULL_AZ_DEPLOYMENT}"
+                port => "5514"
+              }
+              #syslog {
+              #    port => 5514
+              #    use_labels => true
+              #    type => "syslog"
+              #    tags => []
+              #    add_field => { "_index_name" => "syslog" }
+              #}
+          }
+          
+        output-10-es: |
+          output {
+            elasticsearch {
+              # DS_HOSTS is default from elasticsearch_master property
+              hosts => [ "${DST_HOSTS}" ]
+              user => "${ES_USER}"
+              password => "${ES_PASSWORD}"
+              sniffing => false
+              index => "${ES_INDEX_PREFIX:logs}-%{[@metadata][index]}-%{+YYYY.MM.dd}"
+              http_compression => true
+              manage_template => false
+              id => "output-es/${JOB_FULL_AZ_DEPLOYMENT}"
+            }
+            # stdout { codec => rubydebug }
+          }
+        output-20-statsd: |
+          output {
+            if ([@type] == "LogMessage" and [@input] == "syslog") {
+              statsd {
+                host => "${STATSD_HOST}"
+                port => "${STATSD_PORT}"
+                protocol => "udp"
+                namespace => "${DEPLOYMENT_NAME}"
+                sender => "%{[@cf][api]}"
+                gauge => {
+                  "%{[@cf][org]}" => "+1"
+                  "%{[@cf][org]}.%{[@cf][space]}" => "+1"
+                  "%{[@cf][org]}.%{[@cf][space]}.%{[@cf][app]}" => "+1"
+                }
+                id => "output-statsd/${JOB_FULL_AZ_DEPLOYMENT}"
+              }
+              if [@generator] == "APP" {
+                  stdout { codec => rubydebug }
+                  statsd {
+                    host => "${STATSD_HOST}"
+                    port => "${STATSD_PORT}"
+                    protocol => "udp"
+                    namespace => "${DEPLOYMENT_NAME}"
+                    sender => "%{[@cf][api]}"
+                    gauge => {
+                      "%{[@cf][org]}.%{[@cf][space]}.%{[@cf][app]}.%{[@source][src]}" => "+1"
+                    }
+                    id => "output-statsd-stdout-stderr/${JOB_FULL_AZ_DEPLOYMENT}"
+                  }
+              }
+            }
+          }

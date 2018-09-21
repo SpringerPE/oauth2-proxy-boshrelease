@@ -1,0 +1,7 @@
+---
+name: luajit
+
+dependencies: []
+
+files:
+- lua/LuaJIT-2.0.5.tar.gz              # http://luajit.org/download/LuaJIT-2.0.5.tar.gz
